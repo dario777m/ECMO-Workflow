@@ -527,6 +527,12 @@ if is_candidate:
     st.session_state.timeout_completed = can_proceed
     st.session_state.timeout_percentage = timeout_percentage
 
+# Initialize variables for SOAP note
+bsa = 0
+target_ci = 0
+target_flow = 0
+recommended_cannula = "N/A"
+
 # --------------------- Step 7: ECMO Initiation (if candidate and timeout passed) ---------------------
 if is_candidate and st.session_state.get('timeout_completed', False):
     st.header("🩸 Step 7: ECMO Initiation Recommendations")
@@ -717,11 +723,11 @@ ECMO Candidacy Score: {candidacy_score}/8
 **Plan:**
 {'ECMO Initiation Recommended:' if is_candidate else 'ECMO Not Recommended:'}
 {'• Pre-Cannulation Timeout: ' + f"{st.session_state.get('timeout_percentage', 0):.1f}% completion" if is_candidate and st.session_state.get('timeout_completed') is not None else ''}
-{'• BSA: ' + f"{bsa:.2f} m²" if is_candidate and weight > 0 and height > 0 else ''}
-{'• Target CI: ' + f"{target_ci:.1f} L/min/m²" if is_candidate and weight > 0 and height > 0 else ''}
-{'• Recommended Cannula: ' + recommended_cannula if is_candidate and weight > 0 and height > 0 else ''}
+{'• BSA: ' + f"{bsa:.2f} m²" if is_candidate and bsa > 0 else ''}
+{'• Target CI: ' + f"{target_ci:.1f} L/min/m²" if is_candidate and target_ci > 0 else ''}
+{'• Recommended Cannula: ' + recommended_cannula if is_candidate and recommended_cannula != "N/A" else ''}
 {'• Initial RPM: 2500-3200' if is_candidate else ''}
-{'• Target Flow: ' + f"{target_flow:.1f} L/min" if is_candidate and weight > 0 and height > 0 else ''}
+{'• Target Flow: ' + f"{target_flow:.1f} L/min" if is_candidate and target_flow > 0 else ''}
 
 {clinical_notes if clinical_notes else 'No additional notes provided.'}
 """
