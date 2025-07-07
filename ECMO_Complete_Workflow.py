@@ -652,12 +652,8 @@ if is_candidate and st.session_state.get('timeout_passed', False):
         st.metric("BSA", f"{st.session_state.patient_data['bsa']:.2f} m²")
     
     with init_col2:
-        if ecmo_mode == "VV":
-            st.metric("Sweep Gas", "100% O₂")
-            st.metric("Initial FiO₂", "1.0")
-        else:  # VA
-            st.metric("Sweep Gas", "21% O₂")
-            st.metric("Initial FiO₂", "0.21")
+        st.metric("Sweep Gas", "2-3 LPM")
+        st.metric("Initial FiO₂", "1.0")
     
     with init_col3:
         st.metric("Anticoagulation", "Heparin")
