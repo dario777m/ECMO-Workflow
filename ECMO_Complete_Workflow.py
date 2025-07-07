@@ -846,6 +846,17 @@ if is_candidate:
         summary_data['Value'].append('PASSED' if st.session_state.timeout_passed else 'FAILED')
         summary_data['Risk'].append(f"{st.session_state.get('timeout_score', 0)} checks passed")
     
+    # Ensure all arrays have the same length
+    max_length = max(len(summary_data['Metric']), len(summary_data['Value']), len(summary_data['Risk']))
+    
+    # Pad shorter arrays with empty strings
+    while len(summary_data['Metric']) < max_length:
+        summary_data['Metric'].append('')
+    while len(summary_data['Value']) < max_length:
+        summary_data['Value'].append('')
+    while len(summary_data['Risk']) < max_length:
+        summary_data['Risk'].append('')
+    
     summary_df = pd.DataFrame(summary_data)
     st.dataframe(summary_df, use_container_width=True)
     
