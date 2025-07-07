@@ -29,6 +29,18 @@ with col2:
     height = st.number_input("Height (cm)", min_value=0.0, max_value=250.0, value=170.0)
     bmi = weight / ((height/100) ** 2) if height > 0 else 0
     st.metric("BMI", f"{bmi:.1f}")
+    
+    # Calculate Ideal Body Weight (Devine Formula)
+    if sex == "Male":
+        ideal_weight = 50 + 2.3 * ((height - 152.4) / 2.54)
+    else:
+        ideal_weight = 45.5 + 2.3 * ((height - 152.4) / 2.54)
+    
+    # Calculate BSA using DuBois formula
+    bsa = 0.007184 * (height ** 0.725) * (weight ** 0.425)
+    
+    st.metric("Ideal Weight", f"{ideal_weight:.1f} kg")
+    st.metric("BSA", f"{bsa:.2f} m²")
 
 with col3:
     ecmo_mode = st.selectbox("ECMO Mode", ["VV", "VA"])
@@ -37,101 +49,217 @@ with col3:
 # Store patient data
 st.session_state.patient_data = {
     'name': name, 'age': age, 'sex': sex, 'weight': weight, 
-    'height': height, 'bmi': bmi, 'ecmo_mode': ecmo_mode
+    'height': height, 'bmi': bmi, 'ideal_weight': ideal_weight, 'bsa': bsa, 'ecmo_mode': ecmo_mode
 }
 
-# --------------------- Step 2: SAVE Score ---------------------
-st.header("📊 Step 2: SAVE Score Assessment")
-st.markdown("**Survival After Veno-Arterial ECMO Score**")
+# --------------------- Step 2: Scoring System (Mode-specific) ---------------------
+if ecmo_mode == "VA":
+    st.header("📊 Step 2: SAVE Score Assessment")
+    st.markdown("**Survival After Veno-Arterial ECMO Score**")
+    
+    save_col1, save_col2, save_col3 = st.columns(3)
 
-save_col1, save_col2, save_col3 = st.columns(3)
-
-with save_col1:
-    # Age points
-    age_points = 0
-    if age < 18:
+    with save_col1:
+        # Age points
         age_points = 0
-    elif age < 45:
-        age_points = 7
-    elif age < 55:
-        age_points = 12
-    elif age < 65:
-        age_points = 18
-    else:
-        age_points = 22
-    
-    st.metric("Age Points", age_points)
-    
-    # Weight points
-    weight_points = 0
-    if weight < 65:
+        if age < 18:
+            age_points = 0
+        elif age < 45:
+            age_points = 7
+        elif age < 55:
+            age_points = 12
+        elif age < 65:
+            age_points = 18
+        else:
+            age_points = 22
+        
+        st.metric("Age Points", age_points)
+        
+        # Weight points (using actual weight)
         weight_points = 0
-    elif weight < 85:
-        weight_points = 1
-    elif weight < 95:
-        weight_points = 2
-    else:
-        weight_points = 3
-    
-    st.metric("Weight Points", weight_points)
+        if weight < 65:
+            weight_points = 0
+        elif weight < 85:
+            weight_points = 1
+        elif weight < 95:
+            weight_points = 2
+        else:
+            weight_points = 3
+        
+        st.metric("Weight Points", weight_points)
 
-with save_col2:
-    # Pre-ECMO organ failure
-    pre_ecmo_cardiac_arrest = st.checkbox("Pre-ECMO Cardiac Arrest")
-    pre_ecmo_cardiac_arrest_points = 15 if pre_ecmo_cardiac_arrest else 0
-    st.metric("Pre-ECMO Cardiac Arrest Points", pre_ecmo_cardiac_arrest_points)
-    
-    # Acute etiology
-    acute_etiology = st.selectbox("Acute Etiology", 
-                                 ["Post-cardiotomy", "Acute MI", "Myocarditis", "Other"])
-    acute_etiology_points = {"Post-cardiotomy": 0, "Acute MI": 6, "Myocarditis": 8, "Other": 4}
-    st.metric("Acute Etiology Points", acute_etiology_points[acute_etiology])
+    with save_col2:
+        # Pre-ECMO organ failure
+        pre_ecmo_cardiac_arrest = st.checkbox("Pre-ECMO Cardiac Arrest")
+        pre_ecmo_cardiac_arrest_points = 15 if pre_ecmo_cardiac_arrest else 0
+        st.metric("Pre-ECMO Cardiac Arrest Points", pre_ecmo_cardiac_arrest_points)
+        
+        # Acute etiology
+        acute_etiology = st.selectbox("Acute Etiology", 
+                                     ["Post-cardiotomy", "Acute MI", "Myocarditis", "Other"])
+        acute_etiology_points = {"Post-cardiotomy": 0, "Acute MI": 6, "Myocarditis": 8, "Other": 4}
+        st.metric("Acute Etiology Points", acute_etiology_points[acute_etiology])
 
-with save_col3:
-    # Duration of intubation
-    intubation_duration = st.number_input("Duration of Intubation (hours)", min_value=0, value=0)
-    intubation_points = 0
-    if intubation_duration < 10:
+    with save_col3:
+        # Duration of intubation
+        intubation_duration = st.number_input("Duration of Intubation (hours)", min_value=0, value=0)
         intubation_points = 0
-    elif intubation_duration < 29:
-        intubation_points = 3
-    else:
-        intubation_points = 7
-    st.metric("Intubation Duration Points", intubation_points)
-    
-    # Diastolic blood pressure
-    dbp = st.number_input("Diastolic BP (mmHg)", min_value=0, value=80)
-    dbp_points = 0
-    if dbp < 20:
-        dbp_points = 11
-    elif dbp < 40:
-        dbp_points = 8
-    elif dbp < 60:
-        dbp_points = 5
-    else:
+        if intubation_duration < 10:
+            intubation_points = 0
+        elif intubation_duration < 29:
+            intubation_points = 3
+        else:
+            intubation_points = 7
+        st.metric("Intubation Duration Points", intubation_points)
+        
+        # Diastolic blood pressure
+        dbp = st.number_input("Diastolic BP (mmHg)", min_value=0, value=80)
         dbp_points = 0
-    st.metric("Diastolic BP Points", dbp_points)
+        if dbp < 20:
+            dbp_points = 11
+        elif dbp < 40:
+            dbp_points = 8
+        elif dbp < 60:
+            dbp_points = 5
+        else:
+            dbp_points = 0
+        st.metric("Diastolic BP Points", dbp_points)
 
-# Calculate SAVE score
-save_score = age_points + weight_points + pre_ecmo_cardiac_arrest_points + acute_etiology_points[acute_etiology] + intubation_points + dbp_points
+    # Calculate SAVE score
+    save_score = age_points + weight_points + pre_ecmo_cardiac_arrest_points + acute_etiology_points[acute_etiology] + intubation_points + dbp_points
 
-st.markdown(f"### 🎯 **SAVE Score: {save_score}**")
+    st.markdown(f"### 🎯 **SAVE Score: {save_score}**")
 
-# SAVE Score interpretation
-if save_score <= -5:
-    save_risk = "Very High Risk"
-    save_survival = "~18%"
-elif save_score <= -1:
-    save_risk = "High Risk"
-    save_survival = "~33%"
-elif save_score <= 5:
-    save_risk = "Medium Risk"
-    save_survival = "~50%"
-else:
-    save_risk = "Low Risk"
-    save_survival = "~75%"
+    # SAVE Score interpretation
+    if save_score <= -5:
+        save_risk = "Very High Risk"
+        save_survival = "~18%"
+    elif save_score <= -1:
+        save_risk = "High Risk"
+        save_survival = "~33%"
+    elif save_score <= 5:
+        save_risk = "Medium Risk"
+        save_survival = "~50%"
+    else:
+        save_risk = "Low Risk"
+        save_survival = "~75%"
 
-st.info(f"**Risk Level:** {save_risk} | **Predicted Survival:** {save_survival}")
+    st.info(f"**Risk Level:** {save_risk} | **Predicted Survival:** {save_survival}")
+    
+    # Store score for later use
+    mode_score = save_score
+    mode_score_name = "SAVE"
+
+else:  # VV ECMO
+    st.header("📊 Step 2: RESP Score Assessment")
+    st.markdown("**Respiratory ECMO Survival Prediction Score**")
+    
+    resp_col1, resp_col2, resp_col3 = st.columns(3)
+
+    with resp_col1:
+        # Age points
+        age_points = 0
+        if age < 18:
+            age_points = 0
+        elif age < 50:
+            age_points = -2
+        elif age < 65:
+            age_points = -1
+        else:
+            age_points = 0
+        
+        st.metric("Age Points", age_points)
+        
+        # Immunocompromised
+        immunocompromised = st.checkbox("Immunocompromised")
+        immuno_points = -2 if immunocompromised else 0
+        st.metric("Immunocompromised Points", immuno_points)
+        
+        # Duration of mechanical ventilation
+        mech_vent_duration = st.number_input("Duration of Mechanical Ventilation (hours)", min_value=0, value=0)
+        vent_points = 0
+        if mech_vent_duration < 48:
+            vent_points = 3
+        elif mech_vent_duration < 168:  # 7 days
+            vent_points = 0
+        else:
+            vent_points = -3
+        st.metric("Ventilation Duration Points", vent_points)
+
+    with resp_col2:
+        # PaO2/FiO2 ratio
+        pao2_fio2 = st.number_input("PaO₂/FiO₂ ratio", min_value=0, value=100)
+        if pao2_fio2 >= 150:
+            oxy_points = 0
+        elif pao2_fio2 >= 100:
+            oxy_points = -1
+        else:
+            oxy_points = -3
+        st.metric("PaO₂/FiO₂ Points", oxy_points)
+        
+        # pH
+        ph_value = st.number_input("pH", min_value=6.0, max_value=8.0, value=7.4, step=0.01)
+        if ph_value >= 7.15:
+            ph_points = 0
+        else:
+            ph_points = -2
+        st.metric("pH Points", ph_points)
+        
+        # PEEP
+        peep = st.number_input("PEEP (cmH₂O)", min_value=0, value=10)
+        if peep >= 10:
+            peep_points = -1
+        else:
+            peep_points = 0
+        st.metric("PEEP Points", peep_points)
+
+    with resp_col3:
+        # Plateau pressure
+        plateau_pressure = st.number_input("Plateau Pressure (cmH₂O)", min_value=0, value=30)
+        if plateau_pressure >= 30:
+            plateau_points = -1
+        else:
+            plateau_points = 0
+        st.metric("Plateau Pressure Points", plateau_points)
+        
+        # Acute diagnosis
+        acute_diagnosis = st.selectbox("Acute Diagnosis", 
+                                      ["Viral pneumonia", "Bacterial pneumonia", "Asthma", "Trauma/surgery", "Other"])
+        diagnosis_points = {"Viral pneumonia": 0, "Bacterial pneumonia": 0, "Asthma": 6, "Trauma/surgery": 3, "Other": 0}
+        st.metric("Diagnosis Points", diagnosis_points[acute_diagnosis])
+        
+        # Central nervous system dysfunction
+        cns_dysfunction = st.checkbox("Central Nervous System Dysfunction")
+        cns_points = -7 if cns_dysfunction else 0
+        st.metric("CNS Dysfunction Points", cns_points)
+
+    # Calculate RESP score
+    resp_score = age_points + immuno_points + vent_points + oxy_points + ph_points + peep_points + plateau_points + diagnosis_points[acute_diagnosis] + cns_points
+
+    st.markdown(f"### 🎯 **RESP Score: {resp_score}**")
+
+    # RESP Score interpretation
+    if resp_score >= 6:
+        resp_risk = "Very Low Risk"
+        resp_survival = "~92%"
+    elif resp_score >= 3:
+        resp_risk = "Low Risk"
+        resp_survival = "~76%"
+    elif resp_score >= 0:
+        resp_risk = "Medium Risk"
+        resp_survival = "~57%"
+    elif resp_score >= -3:
+        resp_risk = "High Risk"
+        resp_survival = "~33%"
+    else:
+        resp_risk = "Very High Risk"
+        resp_survival = "~18%"
+
+    st.info(f"**Risk Level:** {resp_risk} | **Predicted Survival:** {resp_survival}")
+    
+    # Store score for later use
+    mode_score = resp_score
+    mode_score_name = "RESP"
 
 # --------------------- Step 3: SOFA Score ---------------------
 st.header("🏥 Step 3: SOFA Score Assessment")
@@ -238,8 +366,34 @@ else:
 
 st.info(f"**Predicted Mortality:** {sofa_mortality}")
 
-# --------------------- Step 4: ECMO Criteria ---------------------
+# --------------------- Step 4: ECMO Criteria (including ECPR) ---------------------
 st.header("✅ Step 4: ECMO Candidacy Criteria")
+
+# ECPR section
+st.subheader("🚨 ECPR Criteria (if applicable)")
+ecpr_applicable = st.checkbox("Is this an ECPR case?")
+
+if ecpr_applicable:
+    st.markdown("**ECPR Inclusion Criteria:**")
+    ecpr_col1, ecpr_col2 = st.columns(2)
+    
+    with ecpr_col1:
+        witnessed_arrest = st.checkbox("Witnessed cardiac arrest")
+        bystander_cpr = st.checkbox("Bystander CPR initiated")
+        no_rosc = st.checkbox("No ROSC within 60 minutes")
+        
+    with ecpr_col2:
+        ph_value_ecpr = st.number_input("pH (ECPR)", min_value=6.0, max_value=8.0, value=7.0, step=0.01)
+        lactate_ecpr = st.number_input("Lactate (mmol/L)", min_value=0.0, value=10.0)
+        
+        ph_appropriate = ph_value_ecpr >= 6.8
+        lactate_appropriate = lactate_ecpr <= 15.0
+        
+        st.metric("pH Appropriate", "✅" if ph_appropriate else "❌")
+        st.metric("Lactate Appropriate", "✅" if lactate_appropriate else "❌")
+    
+    ecpr_criteria_met = sum([witnessed_arrest, bystander_cpr, no_rosc, ph_appropriate, lactate_appropriate])
+    st.metric("ECPR Criteria Met", f"{ecpr_criteria_met}/5")
 
 criteria_col1, criteria_col2 = st.columns(2)
 
@@ -292,16 +446,27 @@ st.header("🎯 Step 5: Final ECMO Candidacy Assessment")
 candidacy_score = 0
 candidacy_reasons = []
 
-# SAVE score assessment
-if save_score >= 5:
-    candidacy_score += 2
-    candidacy_reasons.append("✅ Good SAVE score (low risk)")
-elif save_score >= -1:
-    candidacy_score += 1
-    candidacy_reasons.append("⚠️ Moderate SAVE score")
-else:
-    candidacy_score -= 1
-    candidacy_reasons.append("❌ Poor SAVE score (high risk)")
+# Mode-specific score assessment
+if mode_score_name == "SAVE":
+    if mode_score >= 5:
+        candidacy_score += 2
+        candidacy_reasons.append("✅ Good SAVE score (low risk)")
+    elif mode_score >= -1:
+        candidacy_score += 1
+        candidacy_reasons.append("⚠️ Moderate SAVE score")
+    else:
+        candidacy_score -= 1
+        candidacy_reasons.append("❌ Poor SAVE score (high risk)")
+else:  # RESP score
+    if mode_score >= 3:
+        candidacy_score += 2
+        candidacy_reasons.append("✅ Good RESP score (low risk)")
+    elif mode_score >= 0:
+        candidacy_score += 1
+        candidacy_reasons.append("⚠️ Moderate RESP score")
+    else:
+        candidacy_score -= 1
+        candidacy_reasons.append("❌ Poor RESP score (high risk)")
 
 # SOFA score assessment
 if sofa_score <= 9:
@@ -313,6 +478,15 @@ elif sofa_score <= 12:
 else:
     candidacy_score -= 1
     candidacy_reasons.append("❌ High SOFA score")
+
+# ECPR assessment
+if ecpr_applicable:
+    if ecpr_criteria_met >= 4:
+        candidacy_score += 1
+        candidacy_reasons.append("✅ ECPR criteria met")
+    else:
+        candidacy_score -= 1
+        candidacy_reasons.append("❌ ECPR criteria not met")
 
 # Inclusion criteria
 if inclusion_score >= 5:
@@ -376,10 +550,10 @@ if is_candidate:
         surgeon = st.checkbox("Surgeon/Proceduralist")
         anesthesiologist = st.checkbox("Anesthesiologist")
         perfusionist = st.checkbox("Perfusionist")
-        nurse = st.checkbox("ECMO Specialist Nurse")
+        ecmo_specialist = st.checkbox("ECMO Specialist")
         respiratory = st.checkbox("Respiratory Therapist")
         
-        team_present = sum([surgeon, anesthesiologist, perfusionist, nurse, respiratory])
+        team_present = sum([surgeon, anesthesiologist, perfusionist, ecmo_specialist, respiratory])
         st.metric("Team Members", f"{team_present}/5")
     
     with timeout_col2:
@@ -399,354 +573,240 @@ if is_candidate:
     with equip_col1:
         st.markdown("**ECMO Circuit:**")
         circuit_primed = st.checkbox("Circuit primed and tested")
-        cannulas_available = st.checkbox("Cannulas available (correct sizes)")
-        pump_functional = st.checkbox("Pump functional test passed")
-        oxygenator_ready = st.checkbox("Oxygenator ready")
+        backup_circuit = st.checkbox("Backup circuit available")
+        cannulas_ready = st.checkbox("Appropriate cannulas available")
         
-        circuit_ready = sum([circuit_primed, cannulas_available, pump_functional, oxygenator_ready])
-        st.metric("Circuit Ready", f"{circuit_ready}/4")
+        circuit_ready = sum([circuit_primed, backup_circuit, cannulas_ready])
+        st.metric("Circuit Ready", f"{circuit_ready}/3")
     
     with equip_col2:
         st.markdown("**Monitoring:**")
-        a_line_ready = st.checkbox("Arterial line ready")
-        cvp_ready = st.checkbox("CVP line ready")
-        sat_monitor = st.checkbox("Oxygen saturation monitor")
-        ecg_monitor = st.checkbox("ECG monitor")
+        arterial_line = st.checkbox("Arterial line (right arm)")
+        central_line = st.checkbox("Central venous access")
+        monitoring_equipment = st.checkbox("All monitoring equipment ready")
         
-        monitoring_ready = sum([a_line_ready, cvp_ready, sat_monitor, ecg_monitor])
-        st.metric("Monitoring Ready", f"{monitoring_ready}/4")
+        monitoring_ready = sum([arterial_line, central_line, monitoring_equipment])
+        st.metric("Monitoring Ready", f"{monitoring_ready}/3")
     
     with equip_col3:
         st.markdown("**Emergency Equipment:**")
         crash_cart = st.checkbox("Crash cart available")
         defibrillator = st.checkbox("Defibrillator ready")
         emergency_drugs = st.checkbox("Emergency drugs available")
-        backup_equipment = st.checkbox("Backup equipment available")
         
-        emergency_ready = sum([crash_cart, defibrillator, emergency_drugs, backup_equipment])
-        st.metric("Emergency Ready", f"{emergency_ready}/4")
+        emergency_ready = sum([crash_cart, defibrillator, emergency_drugs])
+        st.metric("Emergency Ready", f"{emergency_ready}/3")
     
     # Procedure planning
     st.markdown("### 📋 Procedure Planning")
     plan_col1, plan_col2 = st.columns(2)
     
     with plan_col1:
-        st.markdown("**Site & Approach:**")
-        site_marked = st.checkbox("Insertion site marked")
-        approach_confirmed = st.checkbox("Surgical approach confirmed")
-        landmarks_identified = st.checkbox("Anatomical landmarks identified")
-        sterile_field = st.checkbox("Sterile field prepared")
+        st.markdown("**Cannulation Plan:**")
+        cannulation_site = st.selectbox("Cannulation Site", ["Femoral-Femoral", "Femoral-Jugular", "Femoral-Axillary", "Other"])
+        ultrasound_available = st.checkbox("Ultrasound available")
+        fluoroscopy_available = st.checkbox("Fluoroscopy available (if needed)")
         
-        site_ready = sum([site_marked, approach_confirmed, landmarks_identified, sterile_field])
-        st.metric("Site Ready", f"{site_ready}/4")
+        plan_ready = sum([cannulation_site != "", ultrasound_available, fluoroscopy_available])
+        st.metric("Plan Ready", f"{plan_ready}/3")
     
     with plan_col2:
-        st.markdown("**Anticoagulation:**")
-        heparin_available = st.checkbox("Heparin available")
-        act_baseline = st.number_input("Baseline ACT (seconds)", min_value=0, value=120)
-        anticoagulation_plan = st.selectbox("Anticoagulation plan", 
-                                           ["Heparin bolus + infusion", "Bivalirudin", "Argatroban", "None"])
+        st.markdown("**Safety Checks:**")
+        correct_side = st.checkbox("Correct side marked")
+        positioning_appropriate = st.checkbox("Patient positioning appropriate")
+        sterile_field = st.checkbox("Sterile field prepared")
         
-        st.metric("Baseline ACT", f"{act_baseline} sec")
+        safety_ready = sum([correct_side, positioning_appropriate, sterile_field])
+        st.metric("Safety Ready", f"{safety_ready}/3")
     
-    # Safety checks
-    st.markdown("### ⚠️ Critical Safety Checks")
-    safety_col1, safety_col2 = st.columns(2)
+    # Final timeout decision
+    total_checks = team_present + patient_verified + circuit_ready + monitoring_ready + emergency_ready + plan_ready + safety_ready
+    max_checks = 5 + 4 + 3 + 3 + 3 + 3 + 3  # Total possible checks
     
-    with safety_col1:
-        st.markdown("**Pre-Procedure:**")
-        airway_secure = st.checkbox("Airway secure")
-        iv_access = st.checkbox("IV access adequate")
-        blood_available = st.checkbox("Blood products available")
-        imaging_reviewed = st.checkbox("Recent imaging reviewed")
-        
-        safety_checks = sum([airway_secure, iv_access, blood_available, imaging_reviewed])
-        st.metric("Safety Checks", f"{safety_checks}/4")
+    timeout_passed = total_checks >= (max_checks * 0.8)  # 80% threshold
     
-    with safety_col2:
-        st.markdown("**Complications Plan:**")
-        bleeding_plan = st.checkbox("Bleeding management plan")
-        limb_ischemia_plan = st.checkbox("Limb ischemia monitoring plan")
-        recirculation_plan = st.checkbox("Recirculation monitoring plan (VV)")
-        weaning_plan = st.checkbox("Weaning strategy discussed")
-        
-        complication_plans = sum([bleeding_plan, limb_ischemia_plan, recirculation_plan, weaning_plan])
-        st.metric("Complication Plans", f"{complication_plans}/4")
-    
-    # Calculate timeout completion
-    total_checks = team_present + patient_verified + circuit_ready + monitoring_ready + emergency_ready + site_ready + safety_checks + complication_plans
-    max_checks = 5 + 4 + 4 + 4 + 4 + 4 + 4 + 4  # Total possible checks
-    timeout_percentage = (total_checks / max_checks) * 100
-    
-    # Timeout decision
     st.markdown("### 🎯 Timeout Decision")
-    
-    if timeout_percentage >= 90:
-        timeout_status = "🟢 **PROCEED WITH CANNULATION**"
-        can_proceed = True
-        st.success(timeout_status)
-    elif timeout_percentage >= 75:
-        timeout_status = "🟡 **PROCEED WITH CAUTION**"
-        can_proceed = True
-        st.warning(timeout_status)
-        st.warning("Address missing items before proceeding")
+    if timeout_passed:
+        st.success(f"✅ **TIMEOUT PASSED** - Ready to proceed with cannulation")
+        st.metric("Overall Readiness", f"{total_checks}/{max_checks} ({total_checks/max_checks*100:.0f}%)")
     else:
-        timeout_status = "🔴 **DO NOT PROCEED**"
-        can_proceed = False
-        st.error(timeout_status)
-        st.error("Critical items missing - resolve before proceeding")
+        st.error(f"❌ **TIMEOUT FAILED** - Address missing items before proceeding")
+        st.metric("Overall Readiness", f"{total_checks}/{max_checks} ({total_checks/max_checks*100:.0f}%)")
     
-    st.metric("Timeout Completion", f"{timeout_percentage:.1f}%")
-    
-    # Missing items summary
-    if timeout_percentage < 100:
-        st.markdown("### ❌ Missing Items to Address:")
-        missing_items = []
-        
-        if team_present < 5:
-            missing_items.append("Team members not present")
-        if patient_verified < 4:
-            missing_items.append("Patient verification incomplete")
-        if circuit_ready < 4:
-            missing_items.append("ECMO circuit not ready")
-        if monitoring_ready < 4:
-            missing_items.append("Monitoring equipment not ready")
-        if emergency_ready < 4:
-            missing_items.append("Emergency equipment not ready")
-        if site_ready < 4:
-            missing_items.append("Surgical site not ready")
-        if safety_checks < 4:
-            missing_items.append("Safety checks incomplete")
-        if complication_plans < 4:
-            missing_items.append("Complication plans incomplete")
-        
-        for item in missing_items:
-            st.write(f"• {item}")
-    
-    # Store timeout status
-    st.session_state.timeout_completed = can_proceed
-    st.session_state.timeout_percentage = timeout_percentage
+    # Store timeout result
+    st.session_state.timeout_passed = timeout_passed
+    st.session_state.timeout_score = total_checks
 
-# Initialize variables for SOAP note
-bsa = 0
-target_ci = 0
-target_flow = 0
-recommended_cannula = "N/A"
-
-# --------------------- Step 7: ECMO Initiation (if candidate and timeout passed) ---------------------
-if is_candidate and st.session_state.get('timeout_completed', False):
-    st.header("🩸 Step 7: ECMO Initiation Recommendations")
+# --------------------- Step 7: Initiation Recommendations (if timeout passed) ---------------------
+if is_candidate and st.session_state.get('timeout_passed', False):
+    st.header("🚀 Step 7: ECMO Initiation Recommendations")
     
-    # Cannula flow logic
+    # Calculate required flow based on BSA
+    required_flow = st.session_state.patient_data['bsa'] * 2.4  # L/min/m²
+    
+    st.markdown(f"### 📊 **Initial Settings**")
+    init_col1, init_col2, init_col3 = st.columns(3)
+    
+    with init_col1:
+        st.metric("Target Flow", f"{required_flow:.1f} L/min")
+        st.metric("BSA", f"{st.session_state.patient_data['bsa']:.2f} m²")
+    
+    with init_col2:
+        if ecmo_mode == "VV":
+            st.metric("Sweep Gas", "100% O₂")
+            st.metric("Initial FiO₂", "1.0")
+        else:  # VA
+            st.metric("Sweep Gas", "21% O₂")
+            st.metric("Initial FiO₂", "0.21")
+    
+    with init_col3:
+        st.metric("Anticoagulation", "Heparin")
+        st.metric("Target ACT", "180-220 sec")
+    
+    # Cannula recommendations
+    st.markdown("### 🔌 **Cannula Recommendations**")
+    
     def cannula_rec(required_flow):
         # Add 30% safety margin
-        min_needed = required_flow * 1.3
+        safety_flow = required_flow * 1.3
+        
+        if safety_flow <= 4.0:
+            return "19-21 Fr"
+        elif safety_flow <= 5.5:
+            return "21-23 Fr"
+        elif safety_flow <= 7.0:
+            return "23-25 Fr"
+        else:
+            return "25+ Fr"
+    
+    if ecmo_mode == "VV":
+        st.markdown(f"**Drainage Cannula:** {cannula_rec(required_flow)}")
+        st.markdown(f"**Return Cannula:** {cannula_rec(required_flow)}")
+        st.markdown("**Preferred Sites:** Femoral vein (drainage) + Internal jugular vein (return)")
+    else:  # VA
+        st.markdown(f"**Venous Cannula:** {cannula_rec(required_flow)}")
+        st.markdown(f"**Arterial Cannula:** {cannula_rec(required_flow)}")
+        st.markdown("**Preferred Sites:** Femoral vein + Femoral artery")
+    
+    # Monitoring recommendations
+    st.markdown("### 📈 **Monitoring Recommendations**")
+    monitor_col1, monitor_col2 = st.columns(2)
+    
+    with monitor_col1:
+        st.markdown("**Continuous Monitoring:**")
+        st.write("• MAP > 65 mmHg")
+        st.write("• SpO₂ > 95%")
+        st.write("• SvO₂ > 70%")
+        st.write("• Lactate trending down")
+    
+    with monitor_col2:
+        st.markdown("**ECMO Parameters:**")
+        st.write("• Flow: Target ± 0.5 L/min")
+        st.write("• RPM: < 3500")
+        st.write("• ΔP: < 400 mmHg")
+        st.write("• ACT: 180-220 sec")
+    
+    # Initial management
+    st.markdown("### 💊 **Initial Management**")
+    mgmt_col1, mgmt_col2 = st.columns(2)
+    
+    with mgmt_col1:
+        st.markdown("**Immediate Actions:**")
+        st.write("• Start heparin infusion")
+        st.write("• Titrate vasopressors")
+        st.write("• Optimize volume status")
+        st.write("• Monitor for complications")
+    
+    with mgmt_col2:
+        st.markdown("**First 24 Hours:**")
+        st.write("• Daily CXR")
+        st.write("• Serial ABGs")
+        st.write("• Monitor for bleeding")
+        st.write("• Assess for weaning")
 
-        # Define cannulas and flow capacity
-        cannulas = [
-            ("19 Fr", 3.5),
-            ("21 Fr", 4.5),
-            ("23 Fr", 5.5),
-            ("25 Fr", 6.5),
-            ("27 Fr", 7.5),
-            ("29+ Fr", 8.5)
+# --------------------- Summary and Documentation ---------------------
+if is_candidate:
+    st.header("📋 Summary & Documentation")
+    
+    # Create summary table
+    summary_data = {
+        'Metric': ['Patient', 'ECMO Mode', f'{mode_score_name} Score', 'SOFA Score', 'Candidacy Score', 'BSA', 'Ideal Weight'],
+        'Value': [
+            name,
+            ecmo_mode,
+            f"{mode_score}",
+            f"{sofa_score}",
+            f"{candidacy_score}/8",
+            f"{bsa:.2f} m²",
+            f"{ideal_weight:.1f} kg"
+        ],
+        'Risk': [
+            '',
+            '',
+            f"{save_risk if mode_score_name == 'SAVE' else resp_risk}",
+            f"{sofa_mortality} mortality",
+            recommendation.split('**')[1].split('**')[0],
+            '',
+            ''
         ]
-
-        for size, max_flow in cannulas:
-            if max_flow >= min_needed:
-                return size, max_flow
-
-        return "29+ Fr", 8.5  # fallback if no match
-
-    if weight > 0 and height > 0:
-        # --- Du Bois BSA Calculation ---
-        bsa = 0.007184 * (height ** 0.725) * (weight ** 0.425)
-        
-        # Target CI based on ECMO mode
-        if ecmo_mode == "VV":
-            target_ci = 3.0  # VV ECMO target
-        else:  # VA ECMO
-            target_ci = 2.5  # VA ECMO target (lower due to native heart)
-        
-        target_flow = target_ci * bsa
-        
-        # Get recommended cannula
-        recommended_cannula, max_flow = cannula_rec(target_flow)
-        
-        # Calculate ECMO CI contribution
-        ecmo_ci = max_flow / bsa
-        ci_met = min(ecmo_ci, target_ci)
-        ci_excess = max(0, ecmo_ci - target_ci)
-        achieved_ci = ecmo_ci
-
-        # Display recommendations
-        init_col1, init_col2 = st.columns(2)
-        
-        with init_col1:
-            st.markdown("### 📊 Patient Calculations")
-            st.metric("BSA (Du Bois)", f"{bsa:.2f} m²")
-            st.metric("Target CI", f"{target_ci:.1f} L/min/m²")
-            st.metric("Target Flow", f"{target_flow:.1f} L/min")
-            
-            st.markdown("### 🔧 Cannula Recommendations")
-            st.metric("Recommended Cannula", recommended_cannula)
-            st.metric("Max Flow Capacity", f"{max_flow} L/min")
-            
-            # Initial settings
-            st.markdown("### ⚙️ Initial Settings")
-            st.metric("Initial RPM", "2500 - 3200")
-            st.metric("Target Flow", f"{target_flow:.1f} L/min")
-            
-            # Mode-specific recommendations
-            if ecmo_mode == "VV":
-                st.markdown("### 🔄 VV ECMO Setup")
-                st.write("• **Drainage:** Femoral vein (23-25 Fr)")
-                st.write("• **Return:** Internal jugular vein (19-21 Fr)")
-                st.write("• **Target:** 60-80% of cardiac output")
-            else:  # VA ECMO
-                st.markdown("### 🔄 VA ECMO Setup")
-                st.write("• **Drainage:** Femoral vein (23-25 Fr)")
-                st.write("• **Return:** Femoral artery (17-19 Fr)")
-                st.write("• **Target:** Full cardiac support")
-
-        with init_col2:
-            # Cannula Flow Reference
-            st.markdown("### 🔍 Cannula Flow Reference Guide")
-            cannula_data = {
-                "19 Fr": {"flow": "2.5–3.5 L/min", "notes": "Small adult or low-flow support"},
-                "21 Fr": {"flow": "3.5–4.5 L/min", "notes": "Moderate adult flow"},
-                "23 Fr": {"flow": "4.5–5.5 L/min", "notes": "Standard drainage for VV ECMO"},
-                "25 Fr": {"flow": "5.5–6.5 L/min", "notes": "High flow needs"},
-                "27 Fr": {"flow": "6.5–7.5 L/min", "notes": "Large adult or obese patient"},
-                "29+ Fr": {"flow": "7.5+ L/min", "notes": "Very high flow, VA or VV-VA setups"}
-            }
-
-            selected = st.selectbox("Choose a cannula size to see flow info:", list(cannula_data.keys()))
-            if selected:
-                st.write(f"**Typical Flow:** {cannula_data[selected]['flow']}")
-                st.write(f"**Notes:** {cannula_data[selected]['notes']}")
-
-            # Chart
-            chart_df = pd.DataFrame({
-                "Label": ["Target CI", "ECMO CI", "ECMO CI"],
-                "Part": ["Target", "Met", "Excess"],
-                "CI": [target_ci, ci_met, ci_excess]
-            })
-
-            color_scale = alt.Scale(
-                domain=["Target", "Met", "Excess"],
-                range=["#cccccc", "#4b9cd3", "#4caf50"]
-            )
-
-            chart = alt.Chart(chart_df).mark_bar().encode(
-                x=alt.X("Label:N", title=None),
-                y=alt.Y("CI:Q", title="Cardiac Index (L/min/m²)", stack="zero",
-                        scale=alt.Scale(domain=[0, max(achieved_ci, target_ci) + 0.5])),
-                color=alt.Color("Part:N", scale=color_scale),
-                tooltip=["Label", "Part", "CI"]
-            ).properties(
-                title="Cardiac Index: Target vs ECMO Capacity",
-                width=300,
-                height=300
-            )
-
-            st.altair_chart(chart, use_container_width=True)
-
-        # Safety considerations
-        st.markdown("### ⚠️ Safety Considerations")
-        safety_col1, safety_col2 = st.columns(2)
-        
-        with safety_col1:
-            st.markdown("**Pre-cannulation:**")
-            st.write("• Confirm anticoagulation (ACT > 180s)")
-            st.write("• Verify cannula sizes available")
-            st.write("• Prepare for potential complications")
-            
-        with safety_col2:
-            st.markdown("**Post-cannulation:**")
-            st.write("• Monitor for limb ischemia (VA)")
-            st.write("• Check for recirculation (VV)")
-            st.write("• Optimize flow and RPM settings")
-
-else:
-    st.header("❌ ECMO Not Recommended")
-    st.error("Based on the assessment, ECMO is not recommended for this patient.")
-    st.markdown("### Alternative Considerations:")
-    st.write("• Continue conventional therapy")
-    st.write("• Consider palliative care consultation")
-    st.write("• Reassess if clinical condition changes")
-
-# --------------------- Summary Report ---------------------
-st.header("📊 Complete Assessment Summary")
-
-# Create summary data with consistent array lengths
-base_metrics = ["SAVE Score", "SOFA Score", "Inclusion Criteria", "Exclusion Criteria", "Overall Candidacy"]
-base_values = [save_score, sofa_score, f"{inclusion_score}/6", f"{exclusion_count} present", f"{candidacy_score}/8"]
-base_risks = [save_risk, f"{sofa_mortality} mortality", "Appropriate" if inclusion_score >= 4 else "Limited", 
-              "Acceptable" if exclusion_count <= 1 else "Concerning", recommendation.split("**")[1]]
-
-# Add timeout info if applicable
-if is_candidate and st.session_state.get('timeout_completed') is not None:
-    base_metrics.append("Pre-Cannulation Timeout")
-    base_values.append(f"{st.session_state.get('timeout_percentage', 0):.1f}%")
-    base_risks.append("Passed" if st.session_state.get('timeout_completed', False) else "Failed")
-
-summary_data = {
-    "Metric": base_metrics,
-    "Value": base_values,
-    "Risk": base_risks
-}
-
-summary_df = pd.DataFrame(summary_data)
-st.dataframe(summary_df, use_container_width=True)
-
-# --------------------- Clinical Notes ---------------------
-st.header("📝 Clinical Notes")
-clinical_notes = st.text_area("Additional clinical considerations:", height=150)
-
-if st.button("Generate Complete SOAP Note"):
+    }
+    
+    # Add timeout info if applicable
+    if st.session_state.get('timeout_passed') is not None:
+        summary_data['Metric'].append('Timeout Status')
+        summary_data['Value'].append('PASSED' if st.session_state.timeout_passed else 'FAILED')
+        summary_data['Risk'].append(f"{st.session_state.get('timeout_score', 0)} checks passed")
+    
+    summary_df = pd.DataFrame(summary_data)
+    st.dataframe(summary_df, use_container_width=True)
+    
+    # Generate SOAP note
+    st.subheader("📝 SOAP Note")
+    
+    # Get variables for SOAP note
+    timeout_status = "PASSED" if st.session_state.get('timeout_passed', False) else "FAILED" if st.session_state.get('timeout_passed') is not None else "N/A"
+    timeout_score = st.session_state.get('timeout_score', 0)
+    
     soap_note = f"""
 **Subjective:**
-Patient: {name if name else 'Unknown'}
-Age: {age} years, Sex: {sex}
-Weight: {weight} kg, Height: {height} cm, BMI: {bmi:.1f}
-ECMO Mode: {ecmo_mode}
+{age}-year-old {sex.lower()} patient with {ecmo_mode} ECMO candidacy assessment.
 
 **Objective:**
-SAVE Score: {save_score} ({save_risk} risk, {save_survival} predicted survival)
-SOFA Score: {sofa_score} ({sofa_mortality} predicted mortality)
-ECMO Candidacy Score: {candidacy_score}/8
+- {mode_score_name} Score: {mode_score} ({save_risk if mode_score_name == 'SAVE' else resp_risk})
+- SOFA Score: {sofa_score} (predicted mortality: {sofa_mortality})
+- BSA: {bsa:.2f} m², Ideal Weight: {ideal_weight:.1f} kg
+- Candidacy Score: {candidacy_score}/8
+- Timeout Status: {timeout_status} ({timeout_score} checks passed)
 
 **Assessment:**
 {recommendation}
 
 **Plan:**
-{'ECMO Initiation Recommended:' if is_candidate else 'ECMO Not Recommended:'}
-{'• Pre-Cannulation Timeout: ' + f"{st.session_state.get('timeout_percentage', 0):.1f}% completion" if is_candidate and st.session_state.get('timeout_completed') is not None else ''}
-{'• BSA: ' + f"{bsa:.2f} m²" if is_candidate and bsa > 0 else ''}
-{'• Target CI: ' + f"{target_ci:.1f} L/min/m²" if is_candidate and target_ci > 0 else ''}
-{'• Recommended Cannula: ' + recommended_cannula if is_candidate and recommended_cannula != "N/A" else ''}
-{'• Initial RPM: 2500-3200' if is_candidate else ''}
-{'• Target Flow: ' + f"{target_flow:.1f} L/min" if is_candidate and target_flow > 0 else ''}
-
-{clinical_notes if clinical_notes else 'No additional notes provided.'}
 """
-    st.text_area("Generated SOAP Note:", soap_note, height=300)
+    
+    if st.session_state.get('timeout_passed', False):
+        soap_note += f"""
+- Proceed with {ecmo_mode} ECMO cannulation
+- Target flow: {required_flow:.1f} L/min
+- Monitor for complications
+- Daily reassessment for weaning
+"""
+    else:
+        soap_note += """
+- Address timeout deficiencies before proceeding
+- Re-evaluate candidacy if significant issues identified
+"""
+    
+    st.text_area("SOAP Note", soap_note, height=300)
+    
+    # Download functionality
+    csv = summary_df.to_csv(index=False)
+    st.download_button(
+        label="📥 Download Summary CSV",
+        data=csv,
+        file_name=f"ECMO_Assessment_{name}_{ecmo_mode}.csv",
+        mime="text/csv"
+    )
 
-# --------------------- Navigation ---------------------
-st.markdown("---")
-st.markdown("### 🔄 Workflow Navigation")
-col1, col2, col3 = st.columns(3)
-
-with col1:
-    if st.button("🔄 Restart Assessment"):
-        st.session_state.candidacy_completed = False
-        st.rerun()
-
-with col2:
-    if st.button("📋 Export Report"):
-        st.info("Report export functionality can be added here")
-
-with col3:
-    if st.button("💾 Save Assessment"):
-        st.success("Assessment saved to session state") 
+else:
+    st.warning("❌ Patient is not a candidate for ECMO. Please review exclusion criteria and consider alternative therapies.") 
