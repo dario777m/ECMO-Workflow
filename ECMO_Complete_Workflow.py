@@ -660,29 +660,122 @@ if is_candidate and st.session_state.get('timeout_passed', False):
         st.metric("Target ACT", "180-220 sec")
     
     # Cannula recommendations
-    st.markdown("### 🔌 **Cannula Recommendations**")
+    st.markdown("### 🔌 **Detailed Cannula Recommendations**")
     
-    def cannula_rec(required_flow):
-        # Add 30% safety margin
+    def get_specific_cannula_recommendations(required_flow, bsa, ecmo_mode):
+        """Get specific cannula recommendations based on flow requirements and patient size"""
+        
+        # Add 30% safety margin for flow capacity
         safety_flow = required_flow * 1.3
         
-        if safety_flow <= 4.0:
-            return "19-21 Fr"
-        elif safety_flow <= 5.5:
-            return "21-23 Fr"
-        elif safety_flow <= 7.0:
-            return "23-25 Fr"
-        else:
-            return "25+ Fr"
+        # Define cannula database with specific sizes and flow capacities
+        cannula_database = {
+            "15 Fr": {"max_flow": 2.0, "notes": "Pediatric/small adult"},
+            "17 Fr": {"max_flow": 2.8, "notes": "Small adult"},
+            "19 Fr": {"max_flow": 3.5, "notes": "Standard adult drainage"},
+            "21 Fr": {"max_flow": 4.5, "notes": "Standard adult return"},
+            "23 Fr": {"max_flow": 5.5, "notes": "Large adult drainage"},
+            "25 Fr": {"max_flow": 6.5, "notes": "Large adult return"},
+            "27 Fr": {"max_flow": 7.5, "notes": "Very large adult"},
+            "29 Fr": {"max_flow": 8.5, "notes": "Mega cannula"}
+        }
+        
+        # Find appropriate cannulas for the required flow
+        suitable_cannulas = []
+        for size, specs in cannula_database.items():
+            if specs["max_flow"] >= safety_flow:
+                suitable_cannulas.append((size, specs))
+        
+        # Sort by flow capacity (smallest adequate first)
+        suitable_cannulas.sort(key=lambda x: x[1]["max_flow"])
+        
+        if not suitable_cannulas:
+            return {"drainage": "29+ Fr", "return": "29+ Fr", "notes": "Very high flow required"}
+        
+        # Select optimal cannulas based on ECMO mode and patient size
+        if ecmo_mode == "VV":
+            # For VV, drainage needs higher flow than return
+            if len(suitable_cannulas) >= 2:
+                drainage = suitable_cannulas[0][0]  # Higher flow for drainage
+                return_cannula = suitable_cannulas[1][0] if len(suitable_cannulas) > 1 else suitable_cannulas[0][0]
+            else:
+                drainage = suitable_cannulas[0][0]
+                return_cannula = suitable_cannulas[0][0]
+        else:  # VA
+            # For VA, both need similar flow capacity
+            drainage = suitable_cannulas[0][0]
+            return_cannula = suitable_cannulas[0][0]
+        
+        # Adjust for patient size considerations
+        if bsa < 1.5:  # Small patient
+            if "25" in drainage or "27" in drainage or "29" in drainage:
+                drainage = "23 Fr"  # Downsize for small patient
+            if "25" in return_cannula or "27" in return_cannula or "29" in return_cannula:
+                return_cannula = "21 Fr"  # Downsize for small patient
+        elif bsa > 2.5:  # Large patient
+            if "19" in drainage:
+                drainage = "23 Fr"  # Upsize for large patient
+            if "21" in return_cannula:
+                return_cannula = "25 Fr"  # Upsize for large patient
+        
+        return {
+            "drainage": drainage,
+            "return": return_cannula,
+            "max_flow_drainage": next(specs["max_flow"] for size, specs in cannula_database.items() if size == drainage),
+            "max_flow_return": next(specs["max_flow"] for size, specs in cannula_database.items() if size == return_cannula),
+            "notes": f"Target flow: {required_flow:.1f} L/min, Safety margin: {safety_flow:.1f} L/min"
+        }
     
-    if ecmo_mode == "VV":
-        st.markdown(f"**Drainage Cannula:** {cannula_rec(required_flow)}")
-        st.markdown(f"**Return Cannula:** {cannula_rec(required_flow)}")
-        st.markdown("**Preferred Sites:** Femoral vein (drainage) + Internal jugular vein (return)")
-    else:  # VA
-        st.markdown(f"**Venous Cannula:** {cannula_rec(required_flow)}")
-        st.markdown(f"**Arterial Cannula:** {cannula_rec(required_flow)}")
-        st.markdown("**Preferred Sites:** Femoral vein + Femoral artery")
+    # Get specific recommendations
+    cannula_recs = get_specific_cannula_recommendations(required_flow, bsa, ecmo_mode)
+    
+    # Display detailed recommendations
+    cannula_col1, cannula_col2 = st.columns(2)
+    
+    with cannula_col1:
+        st.markdown("**📊 Flow Analysis:**")
+        st.metric("Target Flow", f"{required_flow:.1f} L/min")
+        st.metric("Safety Flow", f"{required_flow * 1.3:.1f} L/min")
+        st.metric("Patient BSA", f"{bsa:.2f} m²")
+        
+        st.markdown("**🔌 Cannula Specifications:**")
+        if ecmo_mode == "VV":
+            st.markdown(f"**Drainage:** {cannula_recs['drainage']} (max {cannula_recs['max_flow_drainage']} L/min)")
+            st.markdown(f"**Return:** {cannula_recs['return']} (max {cannula_recs['max_flow_return']} L/min)")
+        else:  # VA
+            st.markdown(f"**Venous:** {cannula_recs['drainage']} (max {cannula_recs['max_flow_drainage']} L/min)")
+            st.markdown(f"**Arterial:** {cannula_recs['return']} (max {cannula_recs['max_flow_return']} L/min)")
+    
+    with cannula_col2:
+        st.markdown("**📍 Preferred Sites:**")
+        if ecmo_mode == "VV":
+            st.write("• **Drainage:** Femoral vein (R/L)")
+            st.write("• **Return:** Internal jugular vein (R/L)")
+            st.write("• **Alternative:** Subclavian vein")
+        else:  # VA
+            st.write("• **Venous:** Femoral vein (R/L)")
+            st.write("• **Arterial:** Femoral artery (R/L)")
+            st.write("• **Alternative:** Axillary artery")
+        
+        st.markdown("**⚠️ Considerations:**")
+        st.write(f"• {cannula_recs['notes']}")
+        if bsa < 1.5:
+            st.write("• Small patient - consider downsizing if needed")
+        elif bsa > 2.5:
+            st.write("• Large patient - may need larger cannulas")
+        st.write("• Ensure adequate flow reserve for weaning")
+    
+    # Cannula flow reference table
+    st.markdown("### 📋 **Cannula Flow Reference Guide**")
+    
+    cannula_data = {
+        "Size": ["15 Fr", "17 Fr", "19 Fr", "21 Fr", "23 Fr", "25 Fr", "27 Fr", "29 Fr"],
+        "Max Flow (L/min)": [2.0, 2.8, 3.5, 4.5, 5.5, 6.5, 7.5, 8.5],
+        "Typical Use": ["Pediatric", "Small Adult", "Adult Drainage", "Adult Return", "Large Adult", "High Flow", "Very Large", "Mega"]
+    }
+    
+    cannula_df = pd.DataFrame(cannula_data)
+    st.dataframe(cannula_df, use_container_width=True)
     
     # Monitoring recommendations
     st.markdown("### 📈 **Monitoring Recommendations**")
